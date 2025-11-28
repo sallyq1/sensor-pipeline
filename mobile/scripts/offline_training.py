@@ -22,8 +22,11 @@ import joblib
 # ----------------------------
 
 # Paths to your JSONL log files (one sample per line from HTTP push)
-SCROLLING_FILE = Path("scrolling.jsonl")
-STUDYING_FILE = Path("studying.jsonl")
+BASE_DIR = Path(__file__).parent
+STUDY_DATA = BASE_DIR / ".." / "data" / "Scrolling_Data" / "WristMotion.csv"
+STUDY_DATA = STUDY_DATA.resolve()  # optional but nice
+WRIST_DATA = BASE_DIR / ".." / "data" / "Studying_Data" / "WristMotion.csv"
+WRIST_DATA = WRIST_DATA.resolve()  # optional but nice
 
 # Labels to assign to each file
 LABEL_SCROLLING = "scrolling"
