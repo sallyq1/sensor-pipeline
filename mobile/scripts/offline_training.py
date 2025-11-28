@@ -44,51 +44,41 @@ MODEL_OUT = Path("wrist_rf_model.joblib")
 # Loading & parsing helpers
 # ----------------------------
 
-def load_wrist_samples_from_jsonl(path: Path) -> List[Dict]:
+def load_wrist_samples_from_csv(path: Path) -> pd.DataFrame:
     """
-    Load all 'wrist motion' samples from a jsonl log file.
+    Load wrist motion CSV exported from Sensor Logger.
 
-    Returns a list of samples:
-    {
-        "t":   float seconds (UTC),
-        "ax":  float,
-        "ay":  float,
-        "az":  float,
-        "rx":  float,
-        "ry":  float,
-        "rz":  float,
-    }
+    Returns a DataFrame with at least:
+        t   : float seconds (UTC, from 'time' ns)
+        ax  : accelerationX
+        ay  : accelerationY
+        az  : accelerationZ
+        rx  : rotationRateX
+        ry  : rotationRateY
+        rz  : rotationRateZ
+    and all the original columns in case we want them later.
     """
-    samples = []
     if not path.exists():
         raise FileNotFoundError(f"{path} does not exist")
 
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            msg = json.loads(line)
-            payload = msg.get("payload", [])
-            for rec in payload:
-                if rec.get("name") == "wrist motion":
-                    t_sec = rec["time"] / 1_000_000_000.0  # ns → seconds
-                    vals = rec.get("values", {})
-                    samples.append(
-                        {
-                            "t": t_sec,
-                            "ax": float(vals.get("accelerationX", 0.0)),
-                            "ay": float(vals.get("accelerationY", 0.0)),
-                            "az": float(vals.get("accelerationZ", 0.0)),
-                            "rx": float(vals.get("rotationRateX", 0.0)),
-                            "ry": float(vals.get("rotationRateY", 0.0)),
-                            "rz": float(vals.get("rotationRateZ", 0.0)),
-                        }
-                    )
+    # Read CSV
+    df = pd.read_csv(path)
 
     # Ensure sorted by time
-    samples.sort(key=lambda s: s["t"])
-    return samples
+    df = df.sort_values("time")  # TODO: Validate that time is sorted correctly
+
+    # Add 't' in seconds (ns → s)
+    df["t"] = df["time"] / 1_000_000_000.0
+
+    # For convenience, add short aliases expected by later code
+    df["ax"] = df["accelerationX"]
+    df["ay"] = df["accelerationY"]
+    df["az"] = df["accelerationZ"]
+    df["rx"] = df["rotationRateX"]
+    df["ry"] = df["rotationRateY"]
+    df["rz"] = df["rotationRateZ"]
+
+    return df
 
 
 # ----------------------------
@@ -179,74 +169,76 @@ def windows_from_samples(
 
 def main():
     print("Loading scrolling samples...")
-    scrolling_samples = load_wrist_samples_from_jsonl(SCROLLING_FILE)
-    print(f"  Loaded {len(scrolling_samples)} samples")
+    scrolling_df = load_wrist_samples_from_csv(STUDY_DATA)      
+    print(f"  Loaded {len(scrolling_df)} rows")
+    print(scrolling_df.head(5))
 
     print("Loading studying samples...")
-    studying_samples = load_wrist_samples_from_jsonl(STUDYING_FILE)
-    print(f"  Loaded {len(studying_samples)} samples")
+    studying_df = load_wrist_samples_from_csv(WRIST_DATA)    
+    print(f"  Loaded {len(studying_df)} rows")
+    print(studying_df.head(5))
 
     # Generate sliding-window features for each class
-    print("Creating windows for scrolling...")
-    scroll_feats, scroll_labels = windows_from_samples(
-        scrolling_samples, LABEL_SCROLLING, WINDOW_SEC, STEP_SEC
-    )
-    print(f"  {len(scroll_feats)} windows")
+    # print("Creating windows for scrolling...")
+    # scroll_feats, scroll_labels = windows_from_samples(
+    #     scrolling_samples, LABEL_SCROLLING, WINDOW_SEC, STEP_SEC
+    # )
+    # print(f"  {len(scroll_feats)} windows")
 
-    print("Creating windows for studying...")
-    study_feats, study_labels = windows_from_samples(
-        studying_samples, LABEL_STUDYING, WINDOW_SEC, STEP_SEC
-    )
-    print(f"  {len(study_feats)} windows")
+    # print("Creating windows for studying...")
+    # study_feats, study_labels = windows_from_samples(
+    #     studying_samples, LABEL_STUDYING, WINDOW_SEC, STEP_SEC
+    # )
+    # print(f"  {len(study_feats)} windows")
 
-    all_feats = scroll_feats + study_feats
-    all_labels = scroll_labels + study_labels
+    # all_feats = scroll_feats + study_feats
+    # all_labels = scroll_labels + study_labels
 
-    if not all_feats:
-        raise RuntimeError("No windows were generated – check your data and timestamps.")
+    # if not all_feats:
+    #     raise RuntimeError("No windows were generated – check your data and timestamps.")
 
-    # Build DataFrame
-    df = pd.DataFrame(all_feats)
-    y = pd.Series(all_labels, name="label")
+    # # Build DataFrame
+    # df = pd.DataFrame(all_feats)
+    # y = pd.Series(all_labels, name="label")
 
-    # Drop time columns from training features
-    feature_cols = [c for c in df.columns if not c.startswith("t_")]
-    X = df[feature_cols].values
+    # # Drop time columns from training features
+    # feature_cols = [c for c in df.columns if not c.startswith("t_")]
+    # X = df[feature_cols].values
 
-    print("Feature columns:", feature_cols)
-    print("X shape:", X.shape, "y shape:", y.shape)
+    # print("Feature columns:", feature_cols)
+    # print("X shape:", X.shape, "y shape:", y.shape)
 
-    # Train/test split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=42, stratify=y
-    )
+    # # Train/test split
+    # X_train, X_test, y_train, y_test = train_test_split(
+    #     X, y, test_size=0.3, random_state=42, stratify=y
+    # )
 
-    clf = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=None,
-        random_state=42,
-        n_jobs=-1,
-    )
+    # clf = RandomForestClassifier(
+    #     n_estimators=200,
+    #     max_depth=None,
+    #     random_state=42,
+    #     n_jobs=-1,
+    # )
 
-    print("Training RandomForest...")
-    clf.fit(X_train, y_train)
+    # print("Training RandomForest...")
+    # clf.fit(X_train, y_train)
 
-    print("Evaluating...")
-    y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    # print("Evaluating...")
+    # y_pred = clf.predict(X_test)
+    # print(classification_report(y_test, y_pred))
 
-    # Save model + feature ordering
-    MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(
-        {
-            "model": clf,
-            "feature_order": feature_cols,
-            "window_sec": WINDOW_SEC,
-            "step_sec": STEP_SEC,
-        },
-        MODEL_OUT,
-    )
-    print(f"Saved model to {MODEL_OUT.resolve()}")
+    # # Save model + feature ordering
+    # MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
+    # joblib.dump(
+    #     {
+    #         "model": clf,
+    #         "feature_order": feature_cols,
+    #         "window_sec": WINDOW_SEC,
+    #         "step_sec": STEP_SEC,
+    #     },
+    #     MODEL_OUT,
+    # )
+    # print(f"Saved model to {MODEL_OUT.resolve()}")
 
 
 if __name__ == "__main__":
