@@ -41,3 +41,20 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Ignore any virtual env anywhere in the repo
+.venv/
+venv/
+env/
+ENV/
+*/.venv/
+**/.venv/
+
+# Ignore Python caches anywhere
+__pycache__/
+**/__pycache__/
+*.pyc
+
+
+# VSCode metadata
+.vscode/
