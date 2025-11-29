@@ -28,17 +28,8 @@ STUDY_DATA = STUDY_DATA.resolve()  # optional but nice
 WRIST_DATA = BASE_DIR / ".." / "data" / "Studying_Data" / "WristMotion.csv"
 WRIST_DATA = WRIST_DATA.resolve()  # optional but nice
 
-# Labels to assign to each file
-LABEL_SCROLLING = "scrolling"
-LABEL_STUDYING = "studying"
-
-# Sliding window settings (seconds)
-WINDOW_SEC = 1.0    # window length
-STEP_SEC = 0.5      # stride between windows
-
-# Output model file
-MODEL_OUT = Path("wrist_rf_model.joblib")
-
+WINDOW_SEC = 1
+STEP_SEC = 0.5
 
 # ----------------------------
 # Loading & parsing helpers
@@ -181,11 +172,11 @@ def main():
 
     # Generate sliding-window features for each class
     scroll_feats, scroll_labels = windows_from_df(
-        df=scrolling_df, label="scrolling", window_sec=1, step_sec=0.5
+        df=scrolling_df, label="scrolling", window_sec=WINDOW_SEC, step_sec=STEP_SEC
     )
 
     study_feats, study_labels = windows_from_df(
-        df=studying_df, label="studying", window_sec=1, step_sec=0.5
+        df=studying_df, label="studying", window_sec=WINDOW_SEC, step_sec=STEP_SEC
     )
 
     all_feats = scroll_feats + study_feats
@@ -226,18 +217,20 @@ def main():
     y_pred = clf.predict(X_test)
     print(classification_report(y_test, y_pred))
 
-    # # Save model + feature ordering
-    # MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
-    # joblib.dump(
-    #     {
-    #         "model": clf,
-    #         "feature_order": feature_cols,
-    #         "window_sec": WINDOW_SEC,
-    #         "step_sec": STEP_SEC,
-    #     },
-    #     MODEL_OUT,
-    # )
-    # print(f"Saved model to {MODEL_OUT.resolve()}")
+
+    # Save model in current directory
+    SCRIPT_DIR = Path(__file__).parent.resolve()
+    MODEL_OUT = (SCRIPT_DIR.parent / "wrist_rf_model.joblib").resolve()
+    joblib.dump(
+        {
+            "model": clf,
+            "feature_order": feature_cols,
+            "window_sec": WINDOW_SEC,
+            "step_sec": STEP_SEC,
+        },
+        MODEL_OUT,
+    )
+    print(f"Saved model to {MODEL_OUT.resolve()}")
 
 
 if __name__ == "__main__":
