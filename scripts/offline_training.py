@@ -85,61 +85,60 @@ def load_wrist_samples_from_csv(path: Path) -> pd.DataFrame:
 # Feature extraction
 # ----------------------------
 
-def extract_features_from_window(window_samples: List[Dict]) -> Dict:
-    """Compute numerical features for a list of sample dicts."""
-    if not window_samples:
+def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
+    """Compute numerical features for a pandas DataFrame window."""
+    if window_df is None or window_df.empty:
         return {}
 
-    t = np.array([s["t"] for s in window_samples])
-    ax = np.array([s["ax"] for s in window_samples])
-    ay = np.array([s["ay"] for s in window_samples])
-    az = np.array([s["az"] for s in window_samples])
-    rx = np.array([s["rx"] for s in window_samples])
-    ry = np.array([s["ry"] for s in window_samples])
-    rz = np.array([s["rz"] for s in window_samples])
+    # Use seconds_elapsed (relative time) or convert time ns -> seconds
+    t = window_df["seconds_elapsed"].to_numpy()    # shape (N,)
+    # or: t = window_df["time"].to_numpy() / 1e9
 
+    ax = window_df["accelerationX"].to_numpy()
+    ay = window_df["accelerationY"].to_numpy()
+    az = window_df["accelerationZ"].to_numpy()
+
+    rx = window_df["rotationRateX"].to_numpy()
+    ry = window_df["rotationRateY"].to_numpy()
+    rz = window_df["rotationRateZ"].to_numpy()
+
+    # magnitudes
     acc_mag = np.sqrt(ax**2 + ay**2 + az**2)
     rot_mag = np.sqrt(rx**2 + ry**2 + rz**2)
 
     feats = {
-        # we keep these mainly for debugging; will drop them before training
+        # keep for debugging; we’ll drop later when training
         "t_start": float(t[0]),
         "t_end": float(t[-1]),
 
-        "acc_mag_mean": float(np.mean(acc_mag)),
-        "acc_mag_std": float(np.std(acc_mag)),
-        "rot_mag_mean": float(np.mean(rot_mag)),
-        "rot_mag_std": float(np.std(rot_mag)),
+        "acc_mag_mean": float(acc_mag.mean()),
+        "acc_mag_std": float(acc_mag.std()),
+        "rot_mag_mean": float(rot_mag.mean()),
+        "rot_mag_std": float(rot_mag.std()),
 
-        "ax_mean": float(np.mean(ax)),
-        "ay_mean": float(np.mean(ay)),
-        "az_mean": float(np.mean(az)),
+        "ax_mean": float(ax.mean()),
+        "ay_mean": float(ay.mean()),
+        "az_mean": float(az.mean()),
 
-        "rx_mean": float(np.mean(rx)),
-        "ry_mean": float(np.mean(ry)),
-        "rz_mean": float(np.mean(rz)),
+        "rx_mean": float(rx.mean()),
+        "ry_mean": float(ry.mean()),
+        "rz_mean": float(rz.mean()),
     }
 
     return feats
 
 
-def windows_from_samples(
-    samples: List[Dict],
+def windows_from_df(
+    df: pd.DataFrame,
     label: str,
     window_sec: float,
     step_sec: float,
-) -> Tuple[List[Dict], List[str]]:
-    """
-    Turn a sequence of samples into sliding-window feature rows + labels.
-
-    Returns:
-        feature_rows: list of feature dicts
-        labels:       list of labels (same length)
-    """
-    if not samples:
+) -> tuple[list[dict], list[str]]:
+    if df is None or df.empty:
         return [], []
 
-    times = np.array([s["t"] for s in samples])
+    # use seconds_elapsed as our time axis
+    times = df["seconds_elapsed"].to_numpy()
     start_time = times[0]
     end_time = times[-1]
 
@@ -149,11 +148,13 @@ def windows_from_samples(
     cur_start = start_time
     while cur_start + window_sec <= end_time:
         cur_end = cur_start + window_sec
-        # Pick samples in this window
-        w = [s for s in samples if cur_start <= s["t"] <= cur_end]
 
-        if len(w) > 0:
-            feats = extract_features_from_window(w)
+        # boolean mask: which rows lie in [cur_start, cur_end]
+        mask = (df["seconds_elapsed"] >= cur_start) & (df["seconds_elapsed"] <= cur_end)
+        window_df = df.loc[mask]
+
+        if not window_df.empty:
+            feats = extract_features_from_window(window_df)
             if feats:
                 feature_rows.append(feats)
                 labels.append(label)
@@ -179,53 +180,51 @@ def main():
     print(studying_df.head(5))
 
     # Generate sliding-window features for each class
-    # print("Creating windows for scrolling...")
-    # scroll_feats, scroll_labels = windows_from_samples(
-    #     scrolling_samples, LABEL_SCROLLING, WINDOW_SEC, STEP_SEC
-    # )
-    # print(f"  {len(scroll_feats)} windows")
+    scroll_feats, scroll_labels = windows_from_df(
+        df=scrolling_df, label="scrolling", window_sec=1, step_sec=0.5
+    )
 
-    # print("Creating windows for studying...")
-    # study_feats, study_labels = windows_from_samples(
-    #     studying_samples, LABEL_STUDYING, WINDOW_SEC, STEP_SEC
-    # )
-    # print(f"  {len(study_feats)} windows")
+    study_feats, study_labels = windows_from_df(
+        df=studying_df, label="studying", window_sec=1, step_sec=0.5
+    )
 
-    # all_feats = scroll_feats + study_feats
-    # all_labels = scroll_labels + study_labels
+    all_feats = scroll_feats + study_feats
+    all_labels = scroll_labels + study_labels
 
-    # if not all_feats:
-    #     raise RuntimeError("No windows were generated – check your data and timestamps.")
+    if not all_feats:
+        raise RuntimeError("No windows were generated – check your data and timestamps.")
 
-    # # Build DataFrame
-    # df = pd.DataFrame(all_feats)
-    # y = pd.Series(all_labels, name="label")
+    # Build dataframes (faster for following ML training)
+    df = pd.DataFrame(all_feats)
+    y = pd.Series(all_labels, name="label")    
+    print(df.head(4))
 
-    # # Drop time columns from training features
-    # feature_cols = [c for c in df.columns if not c.startswith("t_")]
-    # X = df[feature_cols].values
 
-    # print("Feature columns:", feature_cols)
-    # print("X shape:", X.shape, "y shape:", y.shape)
+    # Drop time columns from training features
+    feature_cols = [c for c in df.columns if not c.startswith("t_")]
+    X = df[feature_cols].values
 
-    # # Train/test split
-    # X_train, X_test, y_train, y_test = train_test_split(
-    #     X, y, test_size=0.3, random_state=42, stratify=y
-    # )
+    print("Feature columns:", feature_cols)
+    print("X shape:", X.shape, "y shape:", y.shape)
 
-    # clf = RandomForestClassifier(
-    #     n_estimators=200,
-    #     max_depth=None,
-    #     random_state=42,
-    #     n_jobs=-1,
-    # )
+    # Train/test split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=42, stratify=y
+    )
 
-    # print("Training RandomForest...")
-    # clf.fit(X_train, y_train)
+    clf = RandomForestClassifier(
+        n_estimators=200,
+        max_depth=None,
+        random_state=42,
+        n_jobs=-1,
+    )
 
-    # print("Evaluating...")
-    # y_pred = clf.predict(X_test)
-    # print(classification_report(y_test, y_pred))
+    print("Training RandomForest...")
+    clf.fit(X_train, y_train)
+
+    print("Evaluating...")
+    y_pred = clf.predict(X_test)
+    print(classification_report(y_test, y_pred))
 
     # # Save model + feature ordering
     # MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
