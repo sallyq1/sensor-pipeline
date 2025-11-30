@@ -265,17 +265,17 @@ def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
 
 
 
-def windows_from_df(
-    df: pd.DataFrame,
+def windows_from_watch_and_phone(
+    watch_df: pd.DataFrame,
+    phone_df: pd.DataFrame,
     label: str,
     window_sec: float,
     step_sec: float,
-) -> tuple[list[dict], list[str]]:
-    if df is None or df.empty:
+):
+    if watch_df.empty or phone_df.empty:
         return [], []
 
-    # use seconds_elapsed as our time axis
-    times = df["seconds_elapsed"].to_numpy()
+    times = watch_df["seconds_elapsed"].to_numpy()
     start_time = times[0]
     end_time = times[-1]
 
@@ -286,19 +286,39 @@ def windows_from_df(
     while cur_start + window_sec <= end_time:
         cur_end = cur_start + window_sec
 
-        # boolean mask: which rows lie in [cur_start, cur_end]
-        mask = (df["seconds_elapsed"] >= cur_start) & (df["seconds_elapsed"] <= cur_end)
-        window_df = df.loc[mask]
+        # Window from the watch
+        mask_watch = (watch_df["seconds_elapsed"] >= cur_start) & (watch_df["seconds_elapsed"] <= cur_end)
+        watch_win = watch_df.loc[mask_watch]
 
-        if not window_df.empty:
-            feats = extract_features_from_window(window_df)
-            if feats:
-                feature_rows.append(feats)
+        # Window from the phone
+        mask_phone = (phone_df["seconds_elapsed"] >= cur_start) & (phone_df["seconds_elapsed"] <= cur_end)
+        phone_win = phone_df.loc[mask_phone]
+
+        if not watch_win.empty and not phone_win.empty:
+            watch_feats = extract_features_from_window(watch_win)
+            phone_feats = extract_features_from_window(phone_win)
+
+            if watch_feats and phone_feats:
+                # Prefix keys so they don’t collide
+                row = {}
+                for k, v in watch_feats.items():
+                    if k.startswith("t_"):
+                        # Optional: keep a single t_start/t_end from watch
+                        row[f"watch_{k}"] = v
+                    else:
+                        row[f"watch_{k}"] = v
+
+                for k, v in phone_feats.items():
+                    if not k.startswith("t_"):  # we already have times from the watch
+                        row[f"phone_{k}"] = v
+
+                feature_rows.append(row)
                 labels.append(label)
 
         cur_start += step_sec
 
     return feature_rows, labels
+
 
 
 
