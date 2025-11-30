@@ -28,6 +28,7 @@ STEP_SEC = MODEL_BUNDLE.get("step_sec", 0.5)
 print(f"Loaded model from {MODEL_OUT}")
 
 
+
 # -----------------------------
 # Streaming / sliding window config
 # -----------------------------
@@ -47,9 +48,75 @@ df_buffer = pd.DataFrame(
     ]
 )
 
-# Keep track of where we last ended a window (in seconds, same units as t)
-last_window_end = None
 
+#---------------------------------------
+# Keeps track of windows 
+#---------------------------------------
+from collections import deque
+import time
+
+WINDOW_HISTORY = deque(maxlen=2000)
+NEXT_WINDOW_ID = 0
+
+def record_window(label: str, proba: float):
+    global NEXT_WINDOW_ID
+    window = {
+        "id": NEXT_WINDOW_ID,
+        "timestamp": time.time(),
+        "label": label,
+        "proba": proba,   # single float
+    }
+    WINDOW_HISTORY.append(window)
+    NEXT_WINDOW_ID += 1
+
+#---------------------------------------
+# Return majority label in list of windows
+#---------------------------------------
+from collections import Counter
+
+def summarize_windows(windows, threshold=0.7):
+    """
+    Given a list of window dicts, return a majority label
+    if its fraction ≥ threshold, else None.
+    """
+    if not windows:
+        return None, 0.0
+
+    labels = [w["label"] for w in windows]
+    counts = Counter(labels)
+    label, count = counts.most_common(1)[0]
+    frac = count / len(labels)
+
+    if frac >= threshold:
+        return label, frac
+    else:
+        return None, frac
+    
+
+#---------------------------------------
+# API endpoint to store windows  
+#---------------------------------------
+@app.route("/api/windows", methods=["GET"])
+def get_windows():
+    since = request.args.get("since", type=float)
+    now = time.time()
+
+    if since is None:
+        new_windows = list(WINDOW_HISTORY)
+    else:
+        new_windows = [w for w in WINDOW_HISTORY if w["timestamp"] > since]
+
+    summary_label, frac = summarize_windows(new_windows)
+
+    return jsonify({
+        "windows": new_windows,
+        "summary": {
+            "label": summary_label,
+            "confidence": frac,      # fraction of windows that agree
+            "window_count": len(new_windows),
+        },
+        "server_time": now,
+    })
 
 # -----------------------------
 # Feature extraction (DataFrame)
@@ -99,6 +166,10 @@ def extract_features_from_window(window_df: pd.DataFrame) -> dict:
 # -----------------------------
 # Sliding window over df_buffer
 # -----------------------------
+
+# Keep track of where we last ended a window (in seconds, same units as t)
+last_window_end = None
+
 def process_sliding_windows():
     """
     Check if we can create new windows over df_buffer and run the model
@@ -144,7 +215,7 @@ def process_sliding_windows():
                 pred = model.predict(x_vec)[0]
                 proba = model.predict_proba(x_vec).max()
                 print(f"[PRED] {pred} (p={proba:.2f})")
-
+                record_window(pred, proba)
         # move to next window
         last_window_end += STEP_SEC
 
