@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { WindowSample, WindowSummary, WindowsResponse } from "./types";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "http://localhost:8000";
 
 export function useWindowStream(pollMs = 300) {
   const [windows, setWindows] = useState<WindowSample[]>([]);
