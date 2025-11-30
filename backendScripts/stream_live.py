@@ -1,13 +1,16 @@
 # wrist_server.py
 import json
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from datetime import datetime
 from collections import deque   # only if you still want it, but not required now
 import numpy as np
 import pandas as pd
 import joblib
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
+
 
 # -----------------------------
 # Load trained model bundle
@@ -29,9 +32,9 @@ print(f"Loaded model from {MODEL_OUT}")
 
 
 
-# -----------------------------
+# --------------------------------------------
 # Streaming / sliding window config
-# -----------------------------
+# --------------------------------------------
 MAX_BUFFER_SEC = 30        # keep last 30 seconds of data
 # Global DataFrame buffer; each row is one sample
 # Columns will be: ["t", "accelerationX", "accelerationY", "accelerationZ",
@@ -49,9 +52,9 @@ df_buffer = pd.DataFrame(
 )
 
 
-#---------------------------------------
-# Keeps track of windows 
-#---------------------------------------
+#-----------------------------------------------------------------------------------
+# Keeps track of windows (After a window is created this function stores its class)
+#-----------------------------------------------------------------------------------
 from collections import deque
 import time
 
@@ -69,9 +72,9 @@ def record_window(label: str, proba: float):
     WINDOW_HISTORY.append(window)
     NEXT_WINDOW_ID += 1
 
-#---------------------------------------
-# Return majority label in list of windows
-#---------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------
+# Return majority label in list of windows (Return majority label that occurs in a window - (grouped time period))
+#------------------------------------------------------------------------------------------------------------------------------------------------
 from collections import Counter
 
 def summarize_windows(windows, threshold=0.7):
@@ -93,9 +96,9 @@ def summarize_windows(windows, threshold=0.7):
         return None, frac
     
 
-#---------------------------------------
-# API endpoint to store windows  
-#---------------------------------------
+#---------------------------------------------------------------------------------------------------
+# API endpoint to store windows (Store newly processed windows (since last call) in endpoint for frontend)
+#--------------------------------------- =---------------------------------------------------------------------------
 @app.route("/api/windows", methods=["GET"])
 def get_windows():
     since = request.args.get("since", type=float)
@@ -118,9 +121,9 @@ def get_windows():
         "server_time": now,
     })
 
-# -----------------------------
-# Feature extraction (DataFrame)
-# -----------------------------
+# -----------------------------------------------------------------------------
+# Feature extraction (DataFrame) (Extract metrics for each window of 0.5 seconds)
+# ------------------------------------------------------------------------------
 def extract_features_from_window(window_df: pd.DataFrame) -> dict:
     """Compute numerical features for a pandas DataFrame window."""
     if window_df is None or window_df.empty:
@@ -163,9 +166,9 @@ def extract_features_from_window(window_df: pd.DataFrame) -> dict:
     return feats
 
 
-# -----------------------------
-# Sliding window over df_buffer
-# -----------------------------
+# -----------------------------------------------------------------------------------------
+# Sliding window over df_buffer (Group raw data over time periods of 0.5 sec)
+# -----------------------------------------------------------------------------------------
 
 # Keep track of where we last ended a window (in seconds, same units as t)
 last_window_end = None
@@ -224,9 +227,9 @@ def process_sliding_windows():
     df_buffer = df_buffer[df_buffer["t"] >= cutoff].reset_index(drop=True)
 
 
-# -----------------------------
-# HTTP endpoint for Sensor Logger
-# -----------------------------
+# -----------------------------------------------------------
+# HTTP endpoint for Sensor Logger (Get raw data)
+# -----------------------------------------------------------
 @app.route("/data", methods=["POST"])
 def data_endpoint():
     global df_buffer
