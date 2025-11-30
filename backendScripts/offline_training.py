@@ -25,29 +25,34 @@ import joblib
 BASE_DIR = Path(__file__).parent
 STUDY_DATA = BASE_DIR / ".." / "data" / "Scrolling_Data" / "WristMotion.csv"
 STUDY_DATA = STUDY_DATA.resolve()  # optional but nice
-WRIST_DATA = BASE_DIR / ".." / "data" / "Studying_Data" / "WristMotion.csv"
+
+WRIST_DATA = BASE_DIR / ".." / "data" / "New_Studying_Data" / "WristMotion.csv"
 WRIST_DATA = WRIST_DATA.resolve()  # optional but nice
+
+WATCH_ACCEL = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Accelerometer.csv"
+WATCH_GYRO = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Gyroscope.csv"
+WATCH_GRAVITY = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Gravity.csv"
+WATCH_ORIENT = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Orientation.csv"
+
 
 WINDOW_SEC = 1
 STEP_SEC = 0.5
 
 # ----------------------------
-# Loading & parsing helpers
+# Watch and Phone IMU Extraction
 # ----------------------------
 
-def load_wrist_samples_from_csv(path: Path) -> pd.DataFrame:
+def load_watch_imu(path: Path) -> pd.DataFrame:
     """
     Load wrist motion CSV exported from Sensor Logger.
 
-    Returns a DataFrame with at least:
-        t   : float seconds (UTC, from 'time' ns)
-        ax  : accelerationX
-        ay  : accelerationY
-        az  : accelerationZ
-        rx  : rotationRateX
-        ry  : rotationRateY
-        rz  : rotationRateZ
-    and all the original columns in case we want them later.
+    Expected columns (at least):
+        time, seconds_elapsed,
+        rotationRateX, rotationRateY, rotationRateZ,
+        gravityX, gravityY, gravityZ,
+        accelerationX, accelerationY, accelerationZ,
+        quaternionW, quaternionX, quaternionY, quaternionZ,
+        pitch, roll, yaw
     """
     if not path.exists():
         raise FileNotFoundError(f"{path} does not exist")
@@ -55,8 +60,25 @@ def load_wrist_samples_from_csv(path: Path) -> pd.DataFrame:
     # Read CSV
     df = pd.read_csv(path)
 
-    # Ensure sorted by time
-    df = df.sort_values("time")  # TODO: Validate that time is sorted correctly
+    # Make sure key columns exist
+    required_cols = [
+        "time", "seconds_elapsed",
+        "rotationRateX", "rotationRateY", "rotationRateZ",
+        "gravityX", "gravityY", "gravityZ",
+        "accelerationX", "accelerationY", "accelerationZ",
+        "quaternionW", "quaternionX", "quaternionY", "quaternionZ",
+        "pitch", "roll", "yaw",
+    ]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing expected columns in {path.name}: {missing}")
+
+    # Sort by time axis (we'll use seconds_elapsed everywhere else)
+    df = df.sort_values("seconds_elapsed").reset_index(drop=True)
+
+    # Ensure numeric dtypes (sometimes CSVs come in as strings)
+    num_cols = required_cols  # all of these should be numeric
+    df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
 
     # Add 't' in seconds (ns → s)
     df["t"] = df["time"] / 1_000_000_000.0
@@ -72,19 +94,103 @@ def load_wrist_samples_from_csv(path: Path) -> pd.DataFrame:
     return df
 
 
+def load_phone_imu(
+    accel_path: Path,
+    gyro_path: Path,
+    grav_path: Path,
+    orient_path: Path,
+) -> pd.DataFrame:
+    # --- Read all CSVs ---
+    acc = pd.read_csv(accel_path)
+    gyr = pd.read_csv(gyro_path)
+    grav = pd.read_csv(grav_path)
+    ori = pd.read_csv(orient_path)
+
+    # Ensure sorted
+    for df in (acc, gyr, grav, ori):
+        df.sort_values("seconds_elapsed", inplace=True)
+        df.reset_index(drop=True, inplace=True)
+
+    # --- Rename axes to match watch schema ---
+    acc = acc.rename(columns={
+        "x": "accelerationX",
+        "y": "accelerationY",
+        "z": "accelerationZ",
+    })
+
+    gyr = gyr.rename(columns={
+        "x": "rotationRateX",
+        "y": "rotationRateY",
+        "z": "rotationRateZ",
+    })
+
+    grav = grav.rename(columns={
+        "x": "gravityX",
+        "y": "gravityY",
+        "z": "gravityZ",
+    })
+
+    ori = ori.rename(columns={
+        "qw": "quaternionW",
+        "qx": "quaternionX",
+        "qy": "quaternionY",
+        "qz": "quaternionZ",
+    })
+    # yaw / pitch / roll already have the same names you used
+
+    # --- Merge on time + seconds_elapsed ---
+    phone_df = acc.merge(
+        gyr[["time", "seconds_elapsed", "rotationRateX", "rotationRateY", "rotationRateZ"]],
+        on=["time", "seconds_elapsed"],
+        how="inner",
+    ).merge(
+        grav[["time", "seconds_elapsed", "gravityX", "gravityY", "gravityZ"]],
+        on=["time", "seconds_elapsed"],
+        how="inner",
+    ).merge(
+        ori[[
+            "time", "seconds_elapsed",
+            "yaw", "pitch", "roll",
+            "quaternionW", "quaternionX", "quaternionY", "quaternionZ"
+        ]],
+        on=["time", "seconds_elapsed"],
+        how="inner",
+    )
+
+    # Add t (seconds) and axis aliases, to mirror the watch loader
+    phone_df["t"] = phone_df["time"] / 1_000_000_000.0
+
+    phone_df["ax"] = phone_df["accelerationX"]
+    phone_df["ay"] = phone_df["accelerationY"]
+    phone_df["az"] = phone_df["accelerationZ"]
+    phone_df["rx"] = phone_df["rotationRateX"]
+    phone_df["ry"] = phone_df["rotationRateY"]
+    phone_df["rz"] = phone_df["rotationRateZ"]
+
+    return phone_df
 # ----------------------------
 # Feature extraction
 # ----------------------------
 
 def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
-    """Compute numerical features for a pandas DataFrame window."""
+    """
+    Compute numerical features for a pandas DataFrame window.
+
+    Expects columns (from load_wrist_df_from_csv):
+      time, seconds_elapsed,
+      rotationRateX/Y/Z, gravityX/Y/Z,
+      accelerationX/Y/Z,
+      quaternionW/X/Y/Z,
+      pitch, roll, yaw,
+      plus t, ax/ay/az, rx/ry/rz aliases.
+    """
     if window_df is None or window_df.empty:
         return {}
 
-    # Use seconds_elapsed (relative time) or convert time ns -> seconds
-    t = window_df["seconds_elapsed"].to_numpy()    # shape (N,)
-    # or: t = window_df["time"].to_numpy() / 1e9
+    # --- Time axis (use seconds_elapsed as relative time) ---
+    t = window_df["seconds_elapsed"].to_numpy()
 
+    # --- Raw components ---
     ax = window_df["accelerationX"].to_numpy()
     ay = window_df["accelerationY"].to_numpy()
     az = window_df["accelerationZ"].to_numpy()
@@ -93,30 +199,70 @@ def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
     ry = window_df["rotationRateY"].to_numpy()
     rz = window_df["rotationRateZ"].to_numpy()
 
-    # magnitudes
-    acc_mag = np.sqrt(ax**2 + ay**2 + az**2)
-    rot_mag = np.sqrt(rx**2 + ry**2 + rz**2)
+    gx = window_df["gravityX"].to_numpy()
+    gy = window_df["gravityY"].to_numpy()
+    gz = window_df["gravityZ"].to_numpy()
+
+    qw = window_df["quaternionW"].to_numpy()
+    qx = window_df["quaternionX"].to_numpy()
+    qy = window_df["quaternionY"].to_numpy()
+    qz = window_df["quaternionZ"].to_numpy()
+
+    pitch = window_df["pitch"].to_numpy()
+    roll  = window_df["roll"].to_numpy()
+    yaw   = window_df["yaw"].to_numpy()
+
+    # --- Magnitudes ---
+    acc_mag  = np.sqrt(ax**2 + ay**2 + az**2)
+    rot_mag  = np.sqrt(rx**2 + ry**2 + rz**2)
+    grav_mag = np.sqrt(gx**2 + gy**2 + gz**2)
 
     feats = {
-        # keep for debugging; we’ll drop later when training
+        # keep for debugging; you can drop these when building X
         "t_start": float(t[0]),
-        "t_end": float(t[-1]),
+        "t_end":   float(t[-1]),
 
-        "acc_mag_mean": float(acc_mag.mean()),
-        "acc_mag_std": float(acc_mag.std()),
-        "rot_mag_mean": float(rot_mag.mean()),
-        "rot_mag_std": float(rot_mag.std()),
+        # magnitudes
+        "acc_mag_mean":  float(acc_mag.mean()),
+        "acc_mag_std":   float(acc_mag.std()),
+        "rot_mag_mean":  float(rot_mag.mean()),
+        "rot_mag_std":   float(rot_mag.std()),
+        "grav_mag_mean": float(grav_mag.mean()),
+        "grav_mag_std":  float(grav_mag.std()),
 
+        # acceleration axes
         "ax_mean": float(ax.mean()),
         "ay_mean": float(ay.mean()),
         "az_mean": float(az.mean()),
 
+        # rotation rate axes
         "rx_mean": float(rx.mean()),
         "ry_mean": float(ry.mean()),
         "rz_mean": float(rz.mean()),
+
+        # gravity axes
+        "gx_mean": float(gx.mean()),
+        "gy_mean": float(gy.mean()),
+        "gz_mean": float(gz.mean()),
+
+        # orientation (simple stats — good enough for a first pass)
+        "pitch_mean": float(pitch.mean()),
+        "roll_mean":  float(roll.mean()),
+        "yaw_mean":   float(yaw.mean()),
+
+        "pitch_std":  float(pitch.std()),
+        "roll_std":   float(roll.std()),
+        "yaw_std":    float(yaw.std()),
+
+        # quaternion components (averaged; model can learn patterns)
+        "qw_mean": float(qw.mean()),
+        "qx_mean": float(qx.mean()),
+        "qy_mean": float(qy.mean()),
+        "qz_mean": float(qz.mean()),
     }
 
     return feats
+
 
 
 def windows_from_df(
@@ -155,18 +301,21 @@ def windows_from_df(
     return feature_rows, labels
 
 
+
+
+
 # ----------------------------
 # Main training pipeline
 # ----------------------------
 
 def main():
     print("Loading scrolling samples...")
-    scrolling_df = load_wrist_samples_from_csv(STUDY_DATA)      
+    scrolling_df = load_wrist_df_from_csv(STUDY_DATA)      
     print(f"  Loaded {len(scrolling_df)} rows")
     print(scrolling_df.head(5))
 
     print("Loading studying samples...")
-    studying_df = load_wrist_samples_from_csv(WRIST_DATA)    
+    studying_df = load_wrist_df_from_csv(WRIST_DATA)    
     print(f"  Loaded {len(studying_df)} rows")
     print(studying_df.head(5))
 

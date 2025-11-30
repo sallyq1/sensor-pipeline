@@ -1,0 +1,2 @@
+version,device name,recording epoch time,recording time,recording timezone,platform,appVersion,device id,sensors,sampleRateMs,standardisation
+3,iPhone 12,1764536148500,2025-11-30_20-55-48,America/Chicago,ios,1.49,0aa8fcc3-9ad5-4178-b176-9d0efd1344a2,Accelerometer|Gravity|Gyroscope|Orientation|Heart Rate|Wrist Motion|Watch Location|Watch Barometer|Watch Magnetometer|Watch Compass|Annotation|GyroscopeUncalibrated|AccelerometerUncalibrated,10|10|10|10|10|10|10|10|10|10||10|10,false
