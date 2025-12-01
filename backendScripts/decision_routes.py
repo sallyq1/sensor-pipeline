@@ -29,6 +29,6 @@ def decision_endpoint():
         final_result = latest_from_1["result"] if latest_from_1["confidence"] > latest_from_2["confidence"] else latest_from_2["result"]
         final_confidence = latest_from_1["confidence"] if latest_from_1["confidence"] > latest_from_2["confidence"] else latest_from_2["confidence"]
         
-        print(f"[DECISION] result={final_result}, certainty={final_confidence}")
+        print(f"[DECISION] result={final_result}, confidence={final_confidence}")
 
     return jsonify({"status": "ok"})
