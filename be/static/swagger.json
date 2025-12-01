@@ -1,0 +1,148 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Accelerometer API",
+    "version": "1.0.0",
+    "description": "Accelerometer readings grouped by batches"
+  },
+  "basePath": "/",
+  "schemes": ["http"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "paths": {
+    "/batches": {
+      "get": {
+        "summary": "Get list of batches",
+        "tags": ["Batches"],
+        "responses": {
+          "200": {
+            "description": "List of batches",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Batch"
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new batch",
+        "tags": ["Batches"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "example": "test run 1" },
+                "description": { "type": "string", "example": "walking in the room" }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Batch created",
+            "schema": { "$ref": "#/definitions/Batch" }
+          }
+        }
+      }
+    },
+
+    "/accelerometers": {
+      "get": {
+        "summary": "Get accelerometer readings (optionally filtered by batch_id)",
+        "tags": ["Accelerometers"],
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "query",
+            "type": "integer",
+            "required": false,
+            "description": "If provided, filters readings by this batch_id",
+            "example": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "required": false,
+            "default": 100,
+            "description": "Max number of readings to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of accelerometer readings",
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/Accelerometer" }
+            }
+          }
+        }
+      },
+
+      "post": {
+        "summary": "Insert accelerometer reading",
+        "tags": ["Accelerometers"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["x", "y", "z", "batch_id"],
+              "properties": {
+                "x": { "type": "number", "example": 0.12 },
+                "y": { "type": "number", "example": -0.34 },
+                "z": { "type": "number", "example": 9.81 },
+                "batch_id": { "type": "integer", "example": 1 }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Reading created",
+            "schema": { "$ref": "#/definitions/Accelerometer" }
+          },
+          "400": { "description": "Missing fields or invalid batch_id" }
+        }
+      }
+    }
+  },
+
+  "definitions": {
+    "Batch": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer", "example": 1 },
+        "name": { "type": "string", "example": "test run 1" },
+        "description": { "type": "string", "example": "walking in the room" },
+        "created_at": {
+          "type": "string",
+          "example": "2025-11-28T20:30:00.123456"
+        }
+      }
+    },
+
+    "Accelerometer": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer", "example": 1 },
+        "x": { "type": "number", "example": 0.12 },
+        "y": { "type": "number", "example": -0.34 },
+        "z": { "type": "number", "example": 9.81 },
+        "batch_id": { "type": "integer", "example": 1 },
+        "created_at": {
+          "type": "string",
+          "example": "2025-11-28T20:30:00.123456"
+        }
+      }
+    }
+  }
+}
