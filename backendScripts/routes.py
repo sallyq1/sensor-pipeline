@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify
-import token_routes
 
 api_routes_bp = Blueprint("api_routes_bp", __name__)
 
