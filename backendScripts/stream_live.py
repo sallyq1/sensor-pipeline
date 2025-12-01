@@ -50,10 +50,7 @@ df_buffer = pd.DataFrame(
         "rotationRateZ",
         "gravityX",
         "gravityY",
-        "gravityZ",
-        "pitch",
-        "roll",
-        "yaw",
+        "gravityZ"
     ]
 )
 
@@ -75,11 +72,6 @@ phone_df_buffer = pd.DataFrame(
         "gravityX",
         "gravityY",
         "gravityZ",
-
-        # orientation angles
-        "yaw",
-        "pitch",
-        "roll",
 
         # quaternion (optional but your streaming code includes them)
         "quaternionW",
@@ -214,9 +206,6 @@ def extract_features_from_window(window_df: pd.DataFrame) -> dict:
     gy = get_col("gravityY")
     gz = get_col("gravityZ")
 
-    pitch = get_col("pitch")
-    roll  = get_col("roll")
-    yaw   = get_col("yaw")
 
     # --- Magnitudes ---
     acc_mag  = np.sqrt(ax**2 + ay**2 + az**2)
@@ -251,14 +240,6 @@ def extract_features_from_window(window_df: pd.DataFrame) -> dict:
         "gy_mean": float(gy.mean()),
         "gz_mean": float(gz.mean()),
 
-        # orientation (simple stats)
-        "pitch_mean": float(pitch.mean()),
-        "roll_mean":  float(roll.mean()),
-        "yaw_mean":   float(yaw.mean()),
-
-        "pitch_std":  float(pitch.std()),
-        "roll_std":   float(roll.std()),
-        "yaw_std":    float(yaw.std()),
     }
 
     return feats
@@ -404,9 +385,6 @@ def data_endpoint():
                     "gravityY": float(vals.get("gravityY", 0.0)),
                     "gravityZ": float(vals.get("gravityZ", 0.0)),
 
-                    "pitch": float(vals.get("pitch", 0.0)),
-                    "roll":  float(vals.get("roll", 0.0)),
-                    "yaw":   float(vals.get("yaw", 0.0)),
                 }
                 watch_rows.append(row)
 

@@ -23,6 +23,7 @@ BASE_DIR = Path(__file__).parent
 # --- Wrist IMU Scrolling ---
 SCROLL_WATCH = BASE_DIR / ".." / "data" / "New_Scrolling_Data" / "WristMotion.csv"
 SCROLL_WATCH = SCROLL_WATCH.resolve()
+print(SCROLL_WATCH)
 
 # --- Wrist IMU Studying ---
 STUDY_WATCH = BASE_DIR / ".." / "data" / "New_Studying_Data" / "WristMotion.csv"
@@ -74,7 +75,6 @@ def load_watch_imu(path: Path) -> pd.DataFrame:
         "gravityX", "gravityY", "gravityZ",
         "accelerationX", "accelerationY", "accelerationZ",
         "quaternionW", "quaternionX", "quaternionY", "quaternionZ",
-        "pitch", "roll", "yaw",
     ]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
@@ -156,7 +156,6 @@ def load_phone_imu(
     ).merge(
         ori[[
             "time", "seconds_elapsed",
-            "yaw", "pitch", "roll",
             "quaternionW", "quaternionX", "quaternionY", "quaternionZ"
         ]],
         on=["time", "seconds_elapsed"],
@@ -216,9 +215,9 @@ def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
     # qy = window_df["quaternionY"].to_numpy()
     # qz = window_df["quaternionZ"].to_numpy()
 
-    pitch = window_df["pitch"].to_numpy()
-    roll  = window_df["roll"].to_numpy()
-    yaw   = window_df["yaw"].to_numpy()
+    # pitch = window_df["pitch"].to_numpy()
+    # roll  = window_df["roll"].to_numpy()
+    # yaw   = window_df["yaw"].to_numpy()
 
     # --- Magnitudes ---
     acc_mag  = np.sqrt(ax**2 + ay**2 + az**2)
@@ -253,14 +252,14 @@ def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
         "gy_mean": float(gy.mean()),
         "gz_mean": float(gz.mean()),
 
-        # orientation (simple stats — good enough for a first pass)
-        "pitch_mean": float(pitch.mean()),
-        "roll_mean":  float(roll.mean()),
-        "yaw_mean":   float(yaw.mean()),
+        # # orientation (simple stats — good enough for a first pass)
+        # "pitch_mean": float(pitch.mean()),
+        # "roll_mean":  float(roll.mean()),
+        # "yaw_mean":   float(yaw.mean()),
 
-        "pitch_std":  float(pitch.std()),
-        "roll_std":   float(roll.std()),
-        "yaw_std":    float(yaw.std()),
+        # "pitch_std":  float(pitch.std()),
+        # "roll_std":   float(roll.std()),
+        # "yaw_std":    float(yaw.std()),
 
         # # quaternion components (averaged; model can learn patterns)
         # "qw_mean": float(qw.mean()),
