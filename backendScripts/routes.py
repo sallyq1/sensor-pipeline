@@ -59,8 +59,9 @@ def decision_endpoint():
     if (latest_from_1 is not None) and (latest_from_2 is not None):
         final_result = latest_from_1["result"] if latest_from_1["confidence"] > latest_from_2["confidence"] else latest_from_2["result"]
         final_confidence = latest_from_1["confidence"] if latest_from_1["confidence"] > latest_from_2["confidence"] else latest_from_2["confidence"]
-        
-        send_push_notification(LATEST_TOKEN, "Notification", "This is body.")
+
+        if final_result == "distracted":
+            send_push_notification(LATEST_TOKEN, "Stay Focused", "It seems you're getting distracted. Let's refocus!")
 
         latest_from_1 = None
         latest_from_2 = None
