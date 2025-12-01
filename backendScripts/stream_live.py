@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app)
 
 from decision_routes import decision_bp
-app.register_blueprint(decision_bp, url_prefix="/api")
+app.register_blueprint(decision_bp)
 
 # -----------------------------
 # Load trained model bundle
