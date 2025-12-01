@@ -60,7 +60,7 @@ def decision_endpoint():
         final_result = latest_from_1["result"] if latest_from_1["confidence"] > latest_from_2["confidence"] else latest_from_2["result"]
         final_confidence = latest_from_1["confidence"] if latest_from_1["confidence"] > latest_from_2["confidence"] else latest_from_2["confidence"]
         
-        send_push_notification(LATEST_TOKEN, "Hello3", "This is body.")
+        send_push_notification(LATEST_TOKEN, "Notification", "This is body.")
 
         latest_from_1 = None
         latest_from_2 = None
