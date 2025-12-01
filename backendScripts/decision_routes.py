@@ -12,6 +12,18 @@ def decision_endpoint():
     confidence = data.get("confidence")
     from_id = data.get("fromId")
 
+    if not result:
+        return jsonify({"error": "result is required"}), 400
+
+    if not confidence:
+        return jsonify({"error": "confidence is required"}), 400
+
+    if not from_id:
+        return jsonify({"error": "from_id is required"}), 400
+
+    if from_id not in (1, 2):
+        return jsonify({"error": "fromId must be 1 or 2"}), 400
+
     global latest_from_1, latest_from_2
 
     if from_id == 1:
