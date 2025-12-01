@@ -21,14 +21,14 @@ from pathlib import Path
 import joblib
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-MODEL_OUT = None
+MODEL_OUT = (SCRIPT_DIR.parent / "wrist_rf_model.joblib").resolve()
 
 # Load the saved bundle
-MODEL_BUNDLE = None
-model = None
-feature_order = None
-WINDOW_SEC = None
-STEP_SEC = None
+MODEL_BUNDLE = joblib.load(MODEL_OUT)
+model = MODEL_BUNDLE["model"]
+feature_order = MODEL_BUNDLE["feature_order"]
+WINDOW_SEC = MODEL_BUNDLE.get("window_sec", 1.0)
+STEP_SEC = MODEL_BUNDLE.get("step_sec", 0.5)
 
 print(f"Loaded model from {MODEL_OUT}")
 
