@@ -1,6 +1,3 @@
-
-
-
 # offline_train.py
 #
 # Train a RandomForest classifier offline using wrist motion data
@@ -20,28 +17,38 @@ import joblib
 # ----------------------------
 # CONFIG – adjust these
 # ----------------------------
-
 # Paths to your JSONL log files (one sample per line from HTTP push)
 BASE_DIR = Path(__file__).parent
-STUDY_DATA = BASE_DIR / ".." / "data" / "Scrolling_Data" / "WristMotion.csv"
-STUDY_DATA = STUDY_DATA.resolve()  # optional but nice
 
-WRIST_DATA = BASE_DIR / ".." / "data" / "New_Studying_Data" / "WristMotion.csv"
-WRIST_DATA = WRIST_DATA.resolve()  # optional but nice
+# --- Wrist IMU Scrolling ---
+SCROLL_WATCH = BASE_DIR / ".." / "data" / "New_Scrolling_Data" / "WristMotion.csv"
+SCROLL_WATCH = SCROLL_WATCH.resolve()
 
-WATCH_ACCEL = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Accelerometer.csv"
-WATCH_GYRO = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Gyroscope.csv"
-WATCH_GRAVITY = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Gravity.csv"
-WATCH_ORIENT = BASE_DIR / ".." / "data" / "New_Studying_Data" / "Orientation.csv"
+# --- Wrist IMU Studying ---
+STUDY_WATCH = BASE_DIR / ".." / "data" / "New_Studying_Data" / "WristMotion.csv"
+STUDY_WATCH = STUDY_WATCH.resolve()
 
+# --- Phone IMU (studying) ---
+STUDY_PHONE_ACCEL   = (BASE_DIR / ".." / "data" / "New_Studying_Data" / "Accelerometer.csv").resolve()
+STUDY_PHONE_GYRO    = (BASE_DIR / ".." / "data" / "New_Studying_Data" / "Gyroscope.csv").resolve()
+STUDY_PHONE_GRAVITY = (BASE_DIR / ".." / "data" / "New_Studying_Data" / "Gravity.csv").resolve()
+STUDY_PHONE_ORIENT  = (BASE_DIR / ".." / "data" / "New_Studying_Data" / "Orientation.csv").resolve()
 
+# --- Phone IMU (scrolling) ---
+SCROLL_PHONE_ACCEL   = (BASE_DIR / ".." / "data" / "New_Scrolling_Data" / "Accelerometer.csv").resolve()
+SCROLL_PHONE_GYRO    = (BASE_DIR / ".." / "data" / "New_Scrolling_Data" / "Gyroscope.csv").resolve()
+SCROLL_PHONE_GRAVITY = (BASE_DIR / ".." / "data" / "New_Scrolling_Data" / "Gravity.csv").resolve()
+SCROLL_PHONE_ORIENT  = (BASE_DIR / ".." / "data" / "New_Scrolling_Data" / "Orientation.csv").resolve()
+
+# --- Window Sizes for grouping data points
 WINDOW_SEC = 1
 STEP_SEC = 0.5
 
-# ----------------------------
+# -----------------------------------------
 # Watch and Phone IMU Extraction
-# ----------------------------
-
+# Input: Paths
+# Output: Single Dataframe containing data
+# ------------------------------------------
 def load_watch_imu(path: Path) -> pd.DataFrame:
     """
     Load wrist motion CSV exported from Sensor Logger.
@@ -92,7 +99,6 @@ def load_watch_imu(path: Path) -> pd.DataFrame:
     df["rz"] = df["rotationRateZ"]
 
     return df
-
 
 def load_phone_imu(
     accel_path: Path,
@@ -168,10 +174,12 @@ def load_phone_imu(
     phone_df["rz"] = phone_df["rotationRateZ"]
 
     return phone_df
-# ----------------------------
-# Feature extraction
-# ----------------------------
 
+# ----------------------------
+# Window Feature extraction
+# Input: Rows from a dataframe belonging to a window
+# Output: Features for that window
+# ----------------------------
 def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
     """
     Compute numerical features for a pandas DataFrame window.
@@ -203,10 +211,10 @@ def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
     gy = window_df["gravityY"].to_numpy()
     gz = window_df["gravityZ"].to_numpy()
 
-    qw = window_df["quaternionW"].to_numpy()
-    qx = window_df["quaternionX"].to_numpy()
-    qy = window_df["quaternionY"].to_numpy()
-    qz = window_df["quaternionZ"].to_numpy()
+    # qw = window_df["quaternionW"].to_numpy()
+    # qx = window_df["quaternionX"].to_numpy()
+    # qy = window_df["quaternionY"].to_numpy()
+    # qz = window_df["quaternionZ"].to_numpy()
 
     pitch = window_df["pitch"].to_numpy()
     roll  = window_df["roll"].to_numpy()
@@ -254,17 +262,21 @@ def extract_features_from_window(window_df: pd.DataFrame) -> Dict:
         "roll_std":   float(roll.std()),
         "yaw_std":    float(yaw.std()),
 
-        # quaternion components (averaged; model can learn patterns)
-        "qw_mean": float(qw.mean()),
-        "qx_mean": float(qx.mean()),
-        "qy_mean": float(qy.mean()),
-        "qz_mean": float(qz.mean()),
+        # # quaternion components (averaged; model can learn patterns)
+        # "qw_mean": float(qw.mean()),
+        # "qx_mean": float(qx.mean()),
+        # "qy_mean": float(qy.mean()),
+        # "qz_mean": float(qz.mean()),
     }
 
     return feats
 
 
-
+# ----------------------------
+# Window Creation
+# Input: Watch and Phone data frames, label (scroll or study), Window step size
+# Output: List of  Features per window, Labels per window 
+# ----------------------------
 def windows_from_watch_and_phone(
     watch_df: pd.DataFrame,
     phone_df: pd.DataFrame,
@@ -320,6 +332,46 @@ def windows_from_watch_and_phone(
     return feature_rows, labels
 
 
+#---------------------------
+# Calls all the functions above
+# Input: Paths
+# Outputs: Features
+#---------------------------
+def build_windows(
+    label: str,
+    watch_path: Path,
+    phone_accel: Path,
+    phone_gyro: Path,
+    phone_grav: Path,
+    phone_orient: Path,
+    window_sec: float,
+    step_sec: float,
+) -> Tuple[List[Dict], List[str]]:
+    """
+    Given 5 paths (1 watch, 4 phone CSVs) build sliding-window
+    feature rows + labels for one condition (e.g. 'scrolling').
+    """
+    # load watch
+    watch_df = load_watch_imu(watch_path)        # your existing loader
+
+    # load + merge phone IMU
+    phone_df = load_phone_imu(
+        accel_path=phone_accel,
+        gyro_path=phone_gyro,
+        grav_path=phone_grav,
+        orient_path=phone_orient,
+    )
+
+    # create windows with combined features
+    feats, labels = windows_from_watch_and_phone(
+        watch_df=watch_df,
+        phone_df=phone_df,
+        label=label,
+        window_sec=window_sec,
+        step_sec=step_sec,
+    )
+
+    return feats, labels
 
 
 
@@ -329,23 +381,26 @@ def windows_from_watch_and_phone(
 # ----------------------------
 
 def main():
-    print("Loading scrolling samples...")
-    scrolling_df = load_wrist_df_from_csv(STUDY_DATA)      
-    print(f"  Loaded {len(scrolling_df)} rows")
-    print(scrolling_df.head(5))
-
-    print("Loading studying samples...")
-    studying_df = load_wrist_df_from_csv(WRIST_DATA)    
-    print(f"  Loaded {len(studying_df)} rows")
-    print(studying_df.head(5))
-
-    # Generate sliding-window features for each class
-    scroll_feats, scroll_labels = windows_from_df(
-        df=scrolling_df, label="scrolling", window_sec=WINDOW_SEC, step_sec=STEP_SEC
+    scroll_feats, scroll_labels = build_windows(
+        label="scrolling",
+        watch_path=SCROLL_WATCH,
+        phone_accel=SCROLL_PHONE_ACCEL,
+        phone_gyro=SCROLL_PHONE_GYRO,
+        phone_grav=SCROLL_PHONE_GRAVITY,
+        phone_orient=SCROLL_PHONE_ORIENT,
+        window_sec=WINDOW_SEC,
+        step_sec=STEP_SEC,
     )
 
-    study_feats, study_labels = windows_from_df(
-        df=studying_df, label="studying", window_sec=WINDOW_SEC, step_sec=STEP_SEC
+    study_feats, study_labels = build_windows(
+        label="studying",
+        watch_path=STUDY_WATCH,
+        phone_accel=STUDY_PHONE_ACCEL,
+        phone_gyro=STUDY_PHONE_GYRO,
+        phone_grav=STUDY_PHONE_GRAVITY,
+        phone_orient=STUDY_PHONE_ORIENT,
+        window_sec=WINDOW_SEC,
+        step_sec=STEP_SEC,
     )
 
     all_feats = scroll_feats + study_feats
@@ -400,6 +455,9 @@ def main():
         MODEL_OUT,
     )
     print(f"Saved model to {MODEL_OUT.resolve()}")
+
+
+
 
 
 if __name__ == "__main__":
