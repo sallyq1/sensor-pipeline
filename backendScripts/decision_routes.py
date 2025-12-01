@@ -19,7 +19,7 @@ def decision_endpoint():
         return jsonify({"error": "confidence is required"}), 400
 
     if not from_id:
-        return jsonify({"error": "from_id is required"}), 400
+        return jsonify({"error": "fromId is required"}), 400
 
     if from_id not in (1, 2):
         return jsonify({"error": "fromId must be 1 or 2"}), 400
