@@ -11,8 +11,8 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-from decision_routes import decision_bp
-app.register_blueprint(decision_bp)
+from routes import api_routes_bp
+app.register_blueprint(api_routes_bp)
 
 # -----------------------------
 # Load trained model bundle
@@ -21,14 +21,14 @@ from pathlib import Path
 import joblib
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-MODEL_OUT = (SCRIPT_DIR.parent / "wrist_rf_model.joblib").resolve()
+MODEL_OUT = None
 
 # Load the saved bundle
-MODEL_BUNDLE = joblib.load(MODEL_OUT)
-model = MODEL_BUNDLE["model"]
-feature_order = MODEL_BUNDLE["feature_order"]
-WINDOW_SEC = MODEL_BUNDLE.get("window_sec", 1.0)
-STEP_SEC = MODEL_BUNDLE.get("step_sec", 0.5)
+MODEL_BUNDLE = None
+model = None
+feature_order = None
+WINDOW_SEC = None
+STEP_SEC = None
 
 print(f"Loaded model from {MODEL_OUT}")
 
