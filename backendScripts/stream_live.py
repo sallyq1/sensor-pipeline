@@ -143,6 +143,22 @@ def get_windows():
 
     summary_label, frac = summarize_windows(new_windows)
 
+    # Sending results of classification to /decision (post)
+    import requests
+
+    url = "http://localhost:8000/decision"   # or your actual server host/port
+
+    payload = {
+        "confidence": frac,
+        "result": summary_label,
+        "fromId": 1
+    }
+
+    response = requests.post(url, json=payload)
+
+    print("Status:", response.status_code)
+    print("Response:", response.json())
+
     return jsonify({
         "windows": new_windows,
         "summary": {

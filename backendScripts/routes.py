@@ -63,7 +63,7 @@ def decision_endpoint():
         final_result = latest_from_1["result"]
         final_confidence = latest_from_1["confidence"]
 
-        if final_result == "distracted":
+        if final_result == "scrolling":
             send_push_notification(LATEST_TOKEN, "Stay Focused", "It seems you're getting distracted. Let's refocus!")
 
         latest_from_1 = None
@@ -75,7 +75,8 @@ import requests
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
-def send_push_notification(to_token: str, title: str, body: str, data: dict | None = None):
+def send_push_notification(to_token: str, title: str, body: str, data=None):
+
     payload = {
         "to": to_token,
         "title": title,
